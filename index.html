@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sudoku</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f3f3f3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+  #controls { margin-bottom: 15px; }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(9, 40px);
+    grid-template-rows: repeat(9, 40px);
+    gap: 2px;
+  }
+  input {
+    width: 38px;
+    height: 38px;
+    text-align: center;
+    font-size: 18px;
+    border: 1px solid #999;
+  }
+  input.prefilled {
+    background: #ddd;
+    font-weight: bold;
+  }
+  input.wrong {
+    background: #ffcccc;
+  }
+  button {
+    margin: 5px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  #message {
+    margin-top: 10px;
+    font-weight: bold;
+  }
+  #board input:nth-child(3n+1) { border-left: 2px solid black; }
+  #board input:nth-child(n+1):nth-child(-n+9) { border-top: 2px solid black; }
+  #board input:nth-child(9n) { border-right: 2px solid black; }
+  #board input:nth-child(n+73):nth-child(-n+81) { border-bottom: 2px solid black; }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <label>Nehézség: </label>
+  <select id="difficulty">
+    <option value="30">Könnyű</option>
+    <option value="40" selected>Közepes</option>
+    <option value="50">Nehéz</option>
+  </select>
+  <button id="newGame">Új játék</button>
+  <button id="solve">Megoldás</button>
+</div>
+
+<div id="board"></div>
+<div id="message"></div>
+
+<script>
+function emptyBoard() {
+  return Array.from({ length: 9 }, () => Array(9).fill(0));
+}
+
+function isValid(board, row, col, num) {
+  for (let i = 0; i < 9; i++) {
+    if (board[row][i] === num || board[i][col] === num) return false;
+  }
+  const startRow = Math.floor(row / 3) * 3;
+  const startCol = Math.floor(col / 3) * 3;
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      if (board[startRow + i][startCol + j] === num) return false;
+    }
+  }
+  return true;
+}
+
+function solve(board) {
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      if (board[r][c] === 0) {
+        for (let num = 1; num <= 9; num++) {
+          if (isValid(board, r, c, num)) {
+            board[r][c] = num;
+            if (solve(board)) return true;
+            board[r][c] = 0;
+          }
+        }
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+function generateSudoku(holes) {
+  const board = emptyBoard();
+  solve(board);
+  const solution = board.map(row => row.slice());
+  let removed = 0;
+  while (removed < holes) {
+    let r = Math.floor(Math.random() * 9);
+    let c = Math.floor(Math.random() * 9);
+    if (board[r][c] !== 0) {
+      board[r][c] = 0;
+      removed++;
+    }
+  }
+  return { puzzle: board, solution };
+}
+
+const boardEl = document.getElementById('board');
+const difficultyEl = document.getElementById('difficulty');
+const newGameBtn = document.getElementById('newGame');
+const solveBtn = document.getElementById('solve');
+const messageEl = document.getElementById('message');
+let puzzle = [];
+let solution = [];
+let gameOver = false;
+
+function drawBoard() {
+  boardEl.innerHTML = '';
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const input = document.createElement('input');
+      input.maxLength = 1;
+      if (puzzle[r][c] !== 0) {
+        input.value = puzzle[r][c];
+        input.disabled = true;
+        input.classList.add('prefilled');
+      }
+      input.addEventListener('input', () => checkCell(input, r, c));
+      boardEl.appendChild(input);
+    }
+  }
+  messageEl.textContent = '';
+  gameOver = false;
+}
+
+function checkCell(input, r, c) {
+  if (gameOver) return;
+  const val = parseInt(input.value);
+  if (!val || val < 1 || val > 9) {
+    input.value = '';
+    input.classList.remove('wrong');
+    return;
+  }
+  if (val !== solution[r][c]) {
+    input.classList.add('wrong');
+  } else {
+    input.classList.remove('wrong');
+  }
+  checkWin();
+}
+
+function disableAll() {
+  const inputs = boardEl.querySelectorAll('input');
+  inputs.forEach(i => i.disabled = true);
+  gameOver = true;
+}
+
+function checkWin() {
+  const inputs = boardEl.querySelectorAll('input');
+  for (let inp of inputs) {
+    if (!inp.disabled && (inp.value === '' || inp.classList.contains('wrong'))) {
+      return;
+    }
+  }
+  messageEl.textContent = 'Nyertél! A játék véget ért.';
+  disableAll();
+}
+
+function newGame() {
+  const holes = parseInt(difficultyEl.value);
+  const game = generateSudoku(holes);
+  puzzle = game.puzzle;
+  solution = game.solution;
+  drawBoard();
+}
+
+function showSolution() {
+  const inputs = boardEl.querySelectorAll('input');
+  inputs.forEach((inp, i) => {
+    const r = Math.floor(i / 9);
+    const c = i % 9;
+    inp.value = solution[r][c];
+    inp.classList.remove('wrong');
+  });
+  disableAll();
+  messageEl.textContent = 'Megoldás megjelenítve. A játék véget ért.';
+}
+
+newGameBtn.addEventListener('click', newGame);
+solveBtn.addEventListener('click', showSolution);
+newGame();
+</script>
+
+</body>
+</html>

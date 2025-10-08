@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="hu">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sudoku</title>
 <style>
   body {
@@ -13,46 +13,67 @@
     align-items: center;
     padding: 20px;
   }
-  #controls { margin-bottom: 15px; }
+
+  #controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    background: #fff;
+    padding: 10px 15px;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+  }
+
+  #stats {
+    display: flex;
+    gap: 10px;
+    font-weight: bold;
+    align-items: center;
+  }
+
   #board {
     display: grid;
     grid-template-columns: repeat(9, 40px);
     grid-template-rows: repeat(9, 40px);
-    gap: 2px;
+    box-sizing: border-box;
   }
-  input {
-    width: 38px;
-    height: 38px;
+
+  #board input {
+    width: 40px;
+    height: 40px;
+    box-sizing: border-box;
     text-align: center;
     font-size: 18px;
-    border: 1px solid #999;
+    border: 1px solid #ccc;
+    outline: none;
+    background: white;
+    transition: background 0.2s;
   }
-  input.prefilled {
-    background: #ddd;
-    font-weight: bold;
-  }
-  input.wrong {
-    background: #ffcccc;
-  }
-  button {
-    margin: 5px;
-    padding: 5px 10px;
-    cursor: pointer;
-  }
-  #message {
-    margin-top: 10px;
-    font-weight: bold;
-  }
-  #board input:nth-child(3n+1) { border-left: 2px solid black; }
-  #board input:nth-child(n+1):nth-child(-n+9) { border-top: 2px solid black; }
-  #board input:nth-child(9n) { border-right: 2px solid black; }
-  #board input:nth-child(n+73):nth-child(-n+81) { border-bottom: 2px solid black; }
+
+  #board input.thick-left { border-left: 3px solid #000; }
+  #board input.thick-top { border-top: 3px solid #000; }
+  #board input.thick-right { border-right: 3px solid #000; }
+  #board input.thick-bottom { border-bottom: 3px solid #000; }
+
+  input.prefilled { background: #eee; font-weight: bold; }
+  input.wrong { background: #ffbbbb !important; }
+  input.duplicate { background: #ff9999 !important; }
+
+  button { padding: 6px 10px; cursor: pointer; }
+  #message { margin-top: 10px; font-weight: bold; }
 </style>
 </head>
 <body>
 
 <div id="controls">
-  <label>Nehézség: </label>
+  <div id="stats">
+    <span id="timer">Idő: 0:00</span> |
+    <span id="errors">Hibák: 0 / 3</span>
+  </div>
+  <label for="difficulty">Nehézség:</label>
   <select id="difficulty">
     <option value="30">Könnyű</option>
     <option value="40" selected>Közepes</option>
@@ -74,21 +95,27 @@ function isValid(board, row, col, num) {
   for (let i = 0; i < 9; i++) {
     if (board[row][i] === num || board[i][col] === num) return false;
   }
-  const startRow = Math.floor(row / 3) * 3;
-  const startCol = Math.floor(col / 3) * 3;
-  for (let i = 0; i < 3; i++) {
-    for (let j = 0; j < 3; j++) {
-      if (board[startRow + i][startCol + j] === num) return false;
-    }
-  }
+  const sr = Math.floor(row / 3) * 3, sc = Math.floor(col / 3) * 3;
+  for (let i = 0; i < 3; i++)
+    for (let j = 0; j < 3; j++)
+      if (board[sr + i][sc + j] === num) return false;
   return true;
+}
+
+function shuffledNumbers() {
+  const a = [1,2,3,4,5,6,7,8,9];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 function solve(board) {
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 9; c++) {
       if (board[r][c] === 0) {
-        for (let num = 1; num <= 9; num++) {
+        for (const num of shuffledNumbers()) {
           if (isValid(board, r, c, num)) {
             board[r][c] = num;
             if (solve(board)) return true;
@@ -102,16 +129,44 @@ function solve(board) {
   return true;
 }
 
+function hasUniqueSolution(board) {
+  let count = 0;
+  function helper(b) {
+    if (count > 1) return;
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (b[r][c] === 0) {
+          for (let n = 1; n <= 9; n++) {
+            if (isValid(b, r, c, n)) {
+              b[r][c] = n;
+              helper(b);
+              b[r][c] = 0;
+            }
+          }
+          return;
+        }
+      }
+    }
+    count++;
+  }
+  helper(board.map(r=>r.slice()));
+  return count === 1;
+}
+
 function generateSudoku(holes) {
   const board = emptyBoard();
   solve(board);
-  const solution = board.map(row => row.slice());
+  const solution = board.map(r => r.slice());
+  const indices = Array.from({length:81}, (_,i)=>i).sort(() => Math.random()-0.5);
   let removed = 0;
-  while (removed < holes) {
-    let r = Math.floor(Math.random() * 9);
-    let c = Math.floor(Math.random() * 9);
-    if (board[r][c] !== 0) {
-      board[r][c] = 0;
+  for (const pos of indices) {
+    if (removed >= holes) break;
+    const r = Math.floor(pos / 9), c = pos % 9;
+    const backup = board[r][c];
+    board[r][c] = 0;
+    if (!hasUniqueSolution(board)) {
+      board[r][c] = backup;
+    } else {
       removed++;
     }
   }
@@ -123,9 +178,95 @@ const difficultyEl = document.getElementById('difficulty');
 const newGameBtn = document.getElementById('newGame');
 const solveBtn = document.getElementById('solve');
 const messageEl = document.getElementById('message');
-let puzzle = [];
-let solution = [];
-let gameOver = false;
+const timerEl = document.getElementById('timer');
+const errorsEl = document.getElementById('errors');
+
+let puzzle = [], solution = [];
+let gameOver = false, lost = false;
+let errors = 0, seconds = 0, timerInterval = null;
+let maxErrors = 3;
+
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  seconds = 0;
+  timerEl.textContent = "Idő: 0:00";
+  timerInterval = setInterval(() => {
+    seconds++;
+    timerEl.textContent = "Idő: " + formatTime(seconds);
+  }, 1000);
+}
+function stopTimer() { clearInterval(timerInterval); }
+
+function updateErrorDisplay() {
+  errorsEl.textContent = `Hibák: ${errors} / ${maxErrors}`;
+}
+
+function disableAll() {
+  boardEl.querySelectorAll('input').forEach(i => i.disabled = true);
+  gameOver = true;
+}
+
+function clearDuplicateMarks() {
+  boardEl.querySelectorAll('input').forEach(i => i.classList.remove('duplicate'));
+}
+
+function checkDuplicates() {
+  clearDuplicateMarks();
+  const seenRows = Array.from({length:9},()=>({}));
+  const seenCols = Array.from({length:9},()=>({}));
+  const seenBlocks = Array.from({length:9},()=>({}));
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const val = puzzle[r][c];
+      if (!Number.isInteger(val) || val < 1 || val > 9) continue;
+      const block = Math.floor(r/3)*3 + Math.floor(c/3);
+      if (seenRows[r][val]) markDuplicate(r, c, seenRows[r][val].r, seenRows[r][val].c);
+      else seenRows[r][val] = {r,c};
+      if (seenCols[c][val]) markDuplicate(r, c, seenCols[c][val].r, seenCols[c][val].c);
+      else seenCols[c][val] = {r,c};
+      if (seenBlocks[block][val]) markDuplicate(r, c, seenBlocks[block][val].r, seenBlocks[block][val].c);
+      else seenBlocks[block][val] = {r,c};
+    }
+  }
+}
+
+function markDuplicate(r1, c1, r2, c2) {
+  const inputs = boardEl.querySelectorAll('input');
+  inputs[r1*9 + c1].classList.add('duplicate');
+  inputs[r2*9 + c2].classList.add('duplicate');
+}
+
+function registerError() {
+  errors++;
+  updateErrorDisplay();
+  if (errors >= maxErrors) {
+    messageEl.textContent = "Vesztettél! Túl sok hiba.";
+    stopTimer();
+    disableAll();
+    lost = true;
+  }
+}
+
+function checkWin() {
+  if (lost || gameOver) return;
+  const inputs = boardEl.querySelectorAll('input');
+  for (const inp of inputs) {
+    if (!inp.disabled && (
+        inp.value === '' ||
+        inp.classList.contains('wrong') ||
+        inp.classList.contains('duplicate')
+      )) return;
+  }
+  messageEl.textContent = 'Nyertél!';
+  stopTimer();
+  disableAll();
+}
 
 function drawBoard() {
   boardEl.innerHTML = '';
@@ -133,76 +274,75 @@ function drawBoard() {
     for (let c = 0; c < 9; c++) {
       const input = document.createElement('input');
       input.maxLength = 1;
+      input.inputMode = 'numeric';
+      if (c % 3 === 0) input.classList.add('thick-left');
+      if (r % 3 === 0) input.classList.add('thick-top');
+      if (c === 8) input.classList.add('thick-right');
+      if (r === 8) input.classList.add('thick-bottom');
       if (puzzle[r][c] !== 0) {
         input.value = puzzle[r][c];
         input.disabled = true;
         input.classList.add('prefilled');
+      } else {
+        input.addEventListener('input', () => {
+          input.classList.remove('wrong');
+          const v = parseInt(input.value);
+          if (!v || v < 1 || v > 9) {
+            input.value = '';
+            puzzle[r][c] = 0;
+            checkDuplicates();
+            return;
+          }
+          puzzle[r][c] = v;
+          if (v !== solution[r][c]) {
+            input.classList.add('wrong');
+            registerError();
+          } else {
+            input.classList.remove('wrong');
+          }
+          checkDuplicates();
+          checkWin();
+        });
       }
-      input.addEventListener('input', () => checkCell(input, r, c));
       boardEl.appendChild(input);
     }
   }
+  errors = 0;
+  updateErrorDisplay();
+  clearDuplicateMarks();
+  startTimer();
   messageEl.textContent = '';
+  lost = false;
   gameOver = false;
 }
 
-function checkCell(input, r, c) {
-  if (gameOver) return;
-  const val = parseInt(input.value);
-  if (!val || val < 1 || val > 9) {
-    input.value = '';
-    input.classList.remove('wrong');
-    return;
-  }
-  if (val !== solution[r][c]) {
-    input.classList.add('wrong');
-  } else {
-    input.classList.remove('wrong');
-  }
-  checkWin();
-}
-
-function disableAll() {
-  const inputs = boardEl.querySelectorAll('input');
-  inputs.forEach(i => i.disabled = true);
-  gameOver = true;
-}
-
-function checkWin() {
-  const inputs = boardEl.querySelectorAll('input');
-  for (let inp of inputs) {
-    if (!inp.disabled && (inp.value === '' || inp.classList.contains('wrong'))) {
-      return;
-    }
-  }
-  messageEl.textContent = 'Nyertél! A játék véget ért.';
-  disableAll();
-}
-
 function newGame() {
-  const holes = parseInt(difficultyEl.value);
-  const game = generateSudoku(holes);
-  puzzle = game.puzzle;
-  solution = game.solution;
+  const holes = parseInt(difficultyEl.value, 10);
+  if (holes === 30) maxErrors = 5;
+  else if (holes === 40) maxErrors = 3;
+  else maxErrors = 1;
+  const g = generateSudoku(holes);
+  puzzle = g.puzzle.map(r=>r.slice());
+  solution = g.solution.map(r=>r.slice());
   drawBoard();
 }
 
 function showSolution() {
+  stopTimer();
   const inputs = boardEl.querySelectorAll('input');
-  inputs.forEach((inp, i) => {
-    const r = Math.floor(i / 9);
-    const c = i % 9;
-    inp.value = solution[r][c];
-    inp.classList.remove('wrong');
+  inputs.forEach((inp,i)=>{
+    const r=Math.floor(i/9), c=i%9;
+    inp.value=solution[r][c];
+    inp.classList.remove('wrong','duplicate');
+    inp.disabled=true;
   });
-  disableAll();
-  messageEl.textContent = 'Megoldás megjelenítve. A játék véget ért.';
+  messageEl.textContent='Megoldás megjelenítve.';
+  gameOver=true;
 }
 
 newGameBtn.addEventListener('click', newGame);
 solveBtn.addEventListener('click', showSolution);
 newGame();
 </script>
-
 </body>
 </html>
